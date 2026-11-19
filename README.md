@@ -1,11 +1,11 @@
 # JourneyQuest
 
-React Native(Expo) + Mapbox 기반 실시간 걷기 추적 앱.
+React Native(Expo) + MapLibre(OpenStreetMap) 기반 실시간 걷기 추적 앱.
 설계 배경은 [docs/walking-tracker-analysis.md](docs/walking-tracker-analysis.md) 참고.
 
 ## 기능
 
-- Mapbox 지도 위 현재 위치 표시 및 실시간 경로 그리기 (지도 이동 시 "내 위치" 버튼으로 복귀)
+- 지도 위 현재 위치 표시 및 실시간 경로 그리기 (지도 이동 시 "내 위치" 버튼으로 복귀)
 - 거리 / 이동 시간 / 평균·현재 페이스 / 걸음 수 / 칼로리(추정)
 - 시작 · 일시정지 · 재개 · 종료, **자동 일시정지** (30초 이상 정지 시)
 - **화면이 꺼져도 계속 기록** (Android 포그라운드 서비스 알림, iOS 백그라운드 위치)
@@ -20,7 +20,7 @@ React Native(Expo) + Mapbox 기반 실시간 걷기 추적 앱.
 |---|---|
 | 프레임워크 | Expo SDK 58 (Development Build), React Native 0.88, TypeScript |
 | 라우팅 | expo-router (`src/app/`) |
-| 지도 | @rnmapbox/maps (Mapbox Maps SDK v11) |
+| 지도 | @maplibre/maplibre-react-native 11 + OpenFreeMap / OSM 타일 (API 키 없음) |
 | 위치 | expo-location + expo-task-manager |
 | 걸음 수 | expo-sensors (Pedometer) |
 | 저장 | expo-sqlite |
@@ -34,20 +34,19 @@ React Native(Expo) + Mapbox 기반 실시간 걷기 추적 앱.
 - **Node.js 20 이상** (이 PC의 기본 `node`는 v12이므로 `nvm use 24.16.0` 등으로 전환 필요)
 - Android: Android Studio + SDK (로컬 빌드 시) / iOS: macOS + Xcode (로컬 빌드 시)
 - 또는 로컬 SDK 없이 **EAS Build** 사용
-- [Mapbox 계정](https://account.mapbox.com/)의 Public Token (`pk.`로 시작)
 
-### 2. 설치 및 환경변수
+### 2. 설치
 
 ```bash
 npm install
-cp .env.example .env.local   # EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN 값 입력
 ```
 
-> 토큰이 없어도 앱은 실행되며, 지도 자리에 안내 문구가 표시되고 기록 기능은 정상 동작합니다.
+> 지도는 API 키·토큰 없이 동작합니다. 지도 왼쪽 위 선택 박스에서 **1. MapLibre**(OpenFreeMap, 보행로 강조) / **2. OpenStreetMap**(OSM 표준 타일, 비교용)을 고를 수 있습니다.
+> OSM 표준 타일은 [OSMF 타일 정책](https://operations.osmfoundation.org/policies/tiles/)상 출시 앱·오프라인 저장에 쓸 수 없으므로 개발 중 비교용으로만 사용합니다.
 
 ### 3. 개발 빌드 실행
 
-Mapbox·백그라운드 위치·걸음 센서는 네이티브 모듈이라 **Expo Go에서는 동작하지 않습니다.**
+지도·백그라운드 위치·걸음 센서는 네이티브 모듈이라 **Expo Go에서는 동작하지 않습니다.**
 
 ```bash
 # 로컬 빌드 (Android SDK / Xcode 필요)
@@ -83,7 +82,6 @@ src/
 │       ├── index.tsx             # 기록 목록
 │       └── [id].tsx              # 기록 상세
 ├── config/
-│   ├── env.ts                    # Mapbox 토큰
 │   └── tracking.ts               # 필터·자동 일시정지 튜닝 값
 ├── db/                           # SQLite 연결·마이그레이션·저장소
 ├── features/
@@ -96,7 +94,7 @@ src/
 │   │   ├── walkController.ts     # 시작/일시정지/재개/종료/복구
 │   │   ├── trackingStore.ts      # zustand 상태
 │   │   └── useLiveMetrics.ts     # 실시간 지표 훅
-│   ├── map/                      # WalkMap(실시간), RouteMap(기록), GeoJSON 변환
+│   ├── map/                      # WalkMap(실시간), RouteMap(기록), 지도 선택, GeoJSON 변환
 │   └── pedometer/                # 걸음 수 센서 래퍼
 ├── lib/                          # 거리 계산, 포맷, ID
 └── ui/                           # 공통 컴포넌트, 테마

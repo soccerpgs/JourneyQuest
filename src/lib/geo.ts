@@ -3,7 +3,7 @@ export interface LatLng {
   longitude: number;
 }
 
-/** GeoJSON/Mapbox 좌표: [경도, 위도] 순서에 주의 */
+/** GeoJSON/MapLibre 좌표: [경도, 위도] 순서에 주의 */
 export type LngLat = [number, number];
 
 const EARTH_RADIUS_M = 6_371_008.8;

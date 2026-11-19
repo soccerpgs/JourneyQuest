@@ -30,7 +30,7 @@
 **핵심 원칙 3가지**
 
 1. **SQLite가 진실 공급원**입니다. 위치는 들어오는 즉시 DB에 저장되고, 메모리 상태(zustand)는 화면 표시용 사본입니다. 앱이 죽어도 DB에서 복구합니다.
-2. **위치 수집과 지도 표시는 분리**되어 있습니다. 위치는 `expo-location`이 수집하고, Mapbox는 그리기만 합니다.
+2. **위치 수집과 지도 표시는 분리**되어 있습니다. 위치는 `expo-location`이 수집하고, MapLibre는 그리기만 합니다.
 3. **계산 로직은 순수 함수**(`filters.ts`, `sessionMath.ts`, `metrics.ts`)로 분리되어 있어 단위 테스트가 가능합니다.
 
 ---
@@ -42,7 +42,7 @@
 | `src/app/` | 화면 (expo-router). **파일 = 화면 경로** | 라우트 외 코드는 두지 않음 |
 | `src/features/tracking/` | 걷기 추적의 핵심 로직 | 이 폴더가 앱의 중심 |
 | `src/features/tracking/location/` | 위치 라이브러리 연결부 | 라이브러리 교체 시 여기만 수정 |
-| `src/features/map/` | Mapbox 지도 컴포넌트 | 렌더링 전용 |
+| `src/features/map/` | 지도 컴포넌트 (1 MapLibre / 2 OSM 선택) | 렌더링 전용. MapLibre 구현은 `maplibre/` |
 | `src/features/pedometer/` | 걸음 수 센서 래퍼 | |
 | `src/db/` | SQLite 연결·마이그레이션·조회/저장 | |
 | `src/config/` | 튜닝 값, 환경변수 | |
@@ -166,7 +166,7 @@ trackingStore  (zustand)
 - [trackingStore.ts](../src/features/tracking/trackingStore.ts) — `onPointsAccepted`, `appendToSegments`
 - [WalkMap.tsx](../src/features/map/WalkMap.tsx), [routeGeoJson.ts](../src/features/map/routeGeoJson.ts)
 
-> **좌표 순서 주의**: DB/로직은 `latitude, longitude` 이지만 Mapbox(GeoJSON)는 `[경도, 위도]` 입니다. 변환은 `trackingStore.appendToSegments` 와 `routeGeoJson.segmentsFromPoints` 에서만 합니다.
+> **좌표 순서 주의**: DB/로직은 `latitude, longitude` 이지만 지도(GeoJSON)는 `[경도, 위도]` 입니다. 변환은 `trackingStore.appendToSegments` 와 `routeGeoJson.segmentsFromPoints` 에서만 합니다.
 
 ### 왜 큐(`enqueueLocations` / `runExclusive`)가 필요한가?
 
@@ -326,10 +326,30 @@ store.liveSteps ────▶ 걸음
 
 | | `WalkMap` (추적 화면) | `RouteMap` (상세 화면) |
 |---|---|---|
-| 카메라 | `Viewport` followPuck — 내 위치를 따라감 | `Camera bounds` — 전체 경로가 보이게 맞춤 |
+| 카메라 | `Camera trackUserLocation` — 내 위치를 따라감 | `Camera initialViewState.bounds` — 전체 경로가 보이게 맞춤 |
 | 사용자 조작 | 지도를 움직이면 따라가기 해제 → "◎ 내 위치" 버튼 | 자유롭게 조작 |
-| 표시 | 내 위치 퍽 + 경로 선 | 경로 선 + 시작(초록)/종료(빨강) 점 |
-| 토큰 없음 | `MissingTokenNotice` 안내 표시 (기록 기능은 정상) | 동일 |
+| 표시 | 내 위치(`NativeUserLocation`) + 경로 선 | 경로 선 + 시작(초록)/종료(빨강) 점 |
+| MapLibre가 없는 예전 빌드 | `MapLibreUnavailableNotice` 안내 표시 (기록 기능은 정상) | 동일 |
+
+### 지도 선택
+
+렌더러는 MapLibre 하나이고, 지도 왼쪽 위 선택 박스에서 **타일·스타일(내용물)**을 고릅니다. 선택값은 `expo-sqlite/kv-store`에 저장되어 앱을 다시 켜도 유지됩니다 ([mapProvider.ts](../src/features/map/mapProvider.ts)).
+
+| 번호 | 이름 | 타일·스타일 | 비고 |
+|---|---|---|---|
+| 1 | MapLibre | OpenFreeMap `liberty` + 보행로 강조 레이어 | 키 없음, 상용 가능. 기본값 |
+| 2 | OpenStreetMap | OSM 표준 래스터 타일 | 보행로가 가장 잘 보임. **OSMF 정책상 출시용 금지, 비교용** |
+
+```
+WalkMap / RouteMap (공통 props: mapProps.ts)    ← 화면은 이것만 사용
+  └─ loadMapLibre()  네이티브 모듈이 있을 때만 require (정적 import 금지)
+       ├─ maplibre/MapLibreWalkMap, MapLibreRouteMap
+       └─ WalkwayHighlight (1번에서만)
+```
+
+- 지도를 바꾸면 네이티브 뷰를 새로 만듭니다(`key`).
+- **Mapbox(`@rnmapbox/maps`)는 함께 쓸 수 없습니다.** 두 라이브러리에 같은 이름의 TurboModule 스펙 파일(`NativeMapViewModule.ts`)이 있어서, codegen이 만드는 C++ 클래스 `NativeMapViewModuleSpecJSI`가 겹쳐 Android 링크 단계에서 실패합니다(`duplicate symbol`).
+- 전환 배경은 [osm-migration-analysis.md](osm-migration-analysis.md) 참고.
 
 ---
 
@@ -361,7 +381,8 @@ sessions (1) ───< track_points (N)     ON DELETE CASCADE
 | 새 지표 추가 | 계산은 [metrics.ts](../src/features/tracking/metrics.ts) (+ 테스트), 표시는 [useLiveMetrics.ts](../src/features/tracking/useLiveMetrics.ts) → index.tsx |
 | 세션에 컬럼 추가 | `MIGRATIONS` 에 `ALTER TABLE` 추가 → `types.ts` `Session` → `sessionsRepo` 의 `fromRow`/`params`/SQL |
 | 새 화면 추가 | `src/app/` 에 파일 생성 → `_layout.tsx` 에 `Stack.Screen` 옵션 |
-| 지도 스타일 변경 | [mapbox.ts](../src/features/map/mapbox.ts) `MAP_STYLE_URL` |
+| 지도 스타일 변경 | [maplibre/styles.ts](../src/features/map/maplibre/styles.ts) (스타일 URL, OSM 래스터 스타일) · 보행로 강조는 [WalkwayHighlight.tsx](../src/features/map/maplibre/WalkwayHighlight.tsx) |
+| 지도 제공자 추가·제거 | [mapProvider.ts](../src/features/map/mapProvider.ts) `MAP_PROVIDERS` → [WalkMap.tsx](../src/features/map/WalkMap.tsx), [RouteMap.tsx](../src/features/map/RouteMap.tsx) |
 | 권한 문구 변경 | `app.json` 의 `expo-location` / `expo-sensors` 플러그인 옵션 (→ 네이티브 재빌드 필요) |
 
 ---
@@ -379,4 +400,4 @@ sessions (1) ───< track_points (N)     ON DELETE CASCADE
 | `src/features/tracking/__tests__/metrics.test.ts` | 평균/현재 페이스, 칼로리 |
 | `src/features/map/__tests__/routeGeoJson.test.ts` | 구간 분리, GeoJSON 변환 |
 
-`pipeline`, `walkController`, 화면 컴포넌트는 네이티브 모듈(위치, SQLite, Mapbox)에 의존하므로 단위 테스트 대신 **에뮬레이터 경로 재생과 실기기 테스트**로 확인합니다.
+`pipeline`, `walkController`, 화면 컴포넌트는 네이티브 모듈(위치, SQLite, MapLibre)에 의존하므로 단위 테스트 대신 **에뮬레이터 경로 재생과 실기기 테스트**로 확인합니다.

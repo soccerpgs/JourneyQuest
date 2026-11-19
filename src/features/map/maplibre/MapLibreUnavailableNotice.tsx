@@ -1,14 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing } from '@/ui/theme';
 
-/** Mapbox 토큰이 없을 때 지도 대신 표시. 위치 기록 자체는 계속 동작한다. */
-export function MissingTokenNotice() {
+/** 설치된 앱에 MapLibre 네이티브 모듈이 없을 때 지도 대신 표시 */
+export function MapLibreUnavailableNotice() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>지도를 표시할 수 없습니다</Text>
+      <Text style={styles.title}>이 빌드에는 MapLibre가 없습니다</Text>
       <Text style={styles.body}>
-        프로젝트 루트의 .env.local 파일에 EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN(pk.…)을 설정한 뒤 앱을 다시
-        빌드하세요.{'\n'}위치 기록과 통계는 지도 없이도 동작합니다.
+        지도 라이브러리가 바뀌었으므로 개발 빌드를 다시 만들어 설치해야 합니다.{'\n'}
+        npx eas-cli@latest build --profile development{'\n'}
+        위치 기록과 통계는 지도 없이도 동작합니다.
       </Text>
     </View>
   );

@@ -38,7 +38,6 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "@rnmapbox/maps",
       [
         "expo-location",
         {
@@ -56,7 +55,8 @@
         {
           "motionPermission": "걷는 동안 걸음 수를 측정하기 위해 동작 데이터를 사용합니다."
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true

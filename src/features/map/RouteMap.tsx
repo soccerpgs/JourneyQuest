@@ -1,64 +1,30 @@
-import { Camera, CircleLayer, LineLayer, MapView, ShapeSource } from '@rnmapbox/maps';
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import type { TrackPoint } from '@/features/tracking/types';
-import { boundsOf } from '@/lib/geo';
-import { colors } from '@/ui/theme';
-import { MAP_STYLE_URL, ensureMapboxInitialized } from './mapbox';
-import { MissingTokenNotice } from './MissingTokenNotice';
-import { endpointsFeature, routeFeature, segmentsFromPoints } from './routeGeoJson';
+import { StyleSheet, View } from 'react-native';
+import type { RouteMapProps } from './mapProps';
+import { useMapProvider } from './mapProvider';
+import { MapProviderSelect } from './MapProviderSelect';
+import { loadMapLibre } from './maplibre/loadMapLibre';
+import { MapLibreUnavailableNotice } from './maplibre/MapLibreUnavailableNotice';
 
-interface Props {
-  points: readonly TrackPoint[];
-}
-
-/** 저장된 걷기 기록의 전체 경로를 보여주는 정적 지도 */
-export function RouteMap({ points }: Props) {
-  const route = useMemo(() => routeFeature(segmentsFromPoints(points)), [points]);
-  const endpoints = useMemo(() => endpointsFeature(points), [points]);
-  const bounds = useMemo(() => boundsOf(points), [points]);
-
-  if (!ensureMapboxInitialized()) return <MissingTokenNotice />;
-  if (!bounds) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyText}>기록된 경로가 없습니다</Text>
-      </View>
-    );
-  }
+/** 저장된 걷기 기록의 경로 지도. 선택된 지도로 그린다. */
+export function RouteMap(props: RouteMapProps) {
+  const provider = useMapProvider((s) => s.provider);
+  // MapLibre는 정적 import 금지: 네이티브 모듈이 없는 예전 빌드에서 import만 해도 앱이 죽는다
+  const ml = loadMapLibre();
+  if (ml && provider === 'osm') ml.ensureOsmUserAgent();
 
   return (
-    <MapView style={styles.map} styleURL={MAP_STYLE_URL} scaleBarEnabled={false}>
-      <Camera
-        bounds={{ ...bounds, paddingTop: 48, paddingBottom: 48, paddingLeft: 40, paddingRight: 40 }}
-        maxZoomLevel={17}
-        animationDuration={0}
-      />
-      {route && (
-        <ShapeSource id="history-route" shape={route}>
-          <LineLayer
-            id="history-route-line"
-            style={{ lineColor: colors.route, lineWidth: 5, lineCap: 'round', lineJoin: 'round' }}
-          />
-        </ShapeSource>
+    <View style={styles.container}>
+      {!ml && <MapLibreUnavailableNotice />}
+      {ml && provider === 'maplibre' && (
+        <ml.MapLibreRouteMap key="maplibre" {...props} mapStyle={ml.OPENFREEMAP_STYLE_URL} highlightWalkways />
       )}
-      <ShapeSource id="history-endpoints" shape={endpoints}>
-        <CircleLayer
-          id="history-endpoints-circle"
-          style={{
-            circleRadius: 7,
-            circleColor: ['match', ['get', 'kind'], 'start', colors.routeStart, colors.routeEnd],
-            circleStrokeColor: '#FFFFFF',
-            circleStrokeWidth: 2,
-          }}
-        />
-      </ShapeSource>
-    </MapView>
+      {ml && provider === 'osm' && <ml.MapLibreRouteMap key="osm" {...props} mapStyle={ml.OSM_RASTER_STYLE} />}
+      <MapProviderSelect style={styles.select} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  map: { flex: 1 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  emptyText: { color: colors.textMuted },
+  container: { flex: 1 },
+  select: { position: 'absolute', top: 8, left: 8 },
 });
